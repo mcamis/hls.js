@@ -1,5 +1,9 @@
 import { logger } from './logger';
 
+const isWebOsThree = !!navigator.userAgent.match(
+  /^(?=.*web0s)(?=.*chrome\/38).*/
+);
+
 export function sendAddTrackEvent(track: TextTrack, videoEl: HTMLMediaElement) {
   let event: Event;
   try {
@@ -13,6 +17,12 @@ export function sendAddTrackEvent(track: TextTrack, videoEl: HTMLMediaElement) {
   videoEl.dispatchEvent(event);
 }
 
+// Prevents hard crashes in WebOS 3.X when accessing TextTrackCueList.getCueById
+// This hack could potentially cause issues with duplicated cues for a track
+function getCueById(track: TextTrack, cue: VTTCue) {
+  return isWebOsThree ? true : track?.cues?.getCueById(cue?.id);
+}
+
 export function addCueToTrack(track: TextTrack, cue: VTTCue) {
   // Sometimes there are cue overlaps on segmented vtts so the same
   // cue can appear more than once in different vtt files.
@@ -21,10 +31,11 @@ export function addCueToTrack(track: TextTrack, cue: VTTCue) {
   if (mode === 'disabled') {
     track.mode = 'hidden';
   }
-  if (track.cues && !track.cues.getCueById(cue.id)) {
+
+  if (track.cues && !getCueById(track, cue)) {
     try {
       track.addCue(cue);
-      if (!track.cues.getCueById(cue.id)) {
+      if (!getCueById(track, cue)) {
         throw new Error(`addCue is failed for: ${cue}`);
       }
     } catch (err) {
